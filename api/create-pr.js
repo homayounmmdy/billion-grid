@@ -94,6 +94,21 @@ export default async function handler(req, res) {
             gridData = [];
         }
 
+    // Check if this exact coordinate is already claimed by a DIFFERENT user
+    const existingClaim = gridData.find(
+      sq => sq.x === x && sq.y === y && sq.userId !== githubUsername
+    );
+
+    if (existingClaim) {
+      console.error(`❌ Square (${x}, ${y}) is already claimed by @${existingClaim.userId}`);
+      return res.status(409).json({
+        error: `This square is already claimed by @${existingClaim.userId}. Please choose a different square.`
+      });
+    }
+
+    console.log('✅ Square is available for claiming');
+
+    // STEP 4: Parse, append, and encode (now we know it's safe)
         gridData.push(newSquare);
         const newContentBase64 = Buffer.from(JSON.stringify(gridData, null, 2)).toString('base64');
 

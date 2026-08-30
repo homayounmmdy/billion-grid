@@ -36,6 +36,34 @@ export default function App() {
       return;
     }
 
+    setStatus({ type: 'info', text: 'Checking if square is available...' });
+
+    try {
+      const gridResponse = await fetch('/grid-data.json?t=' + Date.now());
+      if (gridResponse.ok) {
+        const gridData = await gridResponse.json();
+
+        // Check if this exact coordinate is already claimed by a DIFFERENT user
+        const existingClaim = gridData.find(
+          sq => sq.x === stagedSquare.x &&
+                sq.y === stagedSquare.y &&
+                sq.userId !== githubUsername.trim()
+        );
+
+        if (existingClaim) {
+          setStatus({
+            type: 'error',
+            text: `❌ This square is already claimed by @${existingClaim.userId}!`
+          });
+          setStagedSquare(null); // Clear the stage
+          return; // Stop here, don't create a PR
+        }
+      }
+    } catch (error) {
+      console.error('Failed to check grid data:', error);
+      // Continue anyway - the backend will catch it as a safety net
+    }
+
     setCommitting(true);
     setStatus({
       type: 'info',
