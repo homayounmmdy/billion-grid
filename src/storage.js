@@ -1,53 +1,42 @@
-// Handles saving/loading grid data to localStorage and JSON files
+// storage.js
+import { exportData } from './mockApi';
 
-import { exportData, importData } from './mockApi';
+export async function saveToServer() {
+  const data = exportData();
+  try {
+    console.log('Attempting to save to server...', data.length, 'squares');
 
-/**
- * Save current grid data to localStorage
- */
+    const response = await fetch('/api/save-grid', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    // Check if the response is actually OK before parsing JSON
+    if (!response.ok) {
+      console.error('Server responded with status:', response.status);
+      const text = await response.text();
+      console.error('Response body:', text);
+      return false;
+    }
+
+    const result = await response.json();
+    if (result.success) {
+      console.log('✅ Successfully saved to public/grid-data.json via server');
+      return true;
+    } else {
+      console.error('❌ Server reported failure:', result.error);
+      return false;
+    }
+  } catch (error) {
+    console.error('❌ Network error while saving to server:', error);
+    return false;
+  }
+}
+
 export function saveToLocalStorage() {
     const data = exportData();
     localStorage.setItem('billionGridData', JSON.stringify(data));
-    console.log(`Saved ${data.length} squares to localStorage`);
-}
-
-/**
- * Download grid data as JSON file
- */
-export function downloadJsonFile() {
-    const data = exportData();
-    const json = JSON.stringify(data, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'grid-data.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    console.log(`Downloaded grid-data.json with ${data.length} squares`);
-}
-
-/**
- * Load grid data from uploaded JSON file
- */
-export function loadFromJsonFile(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const data = JSON.parse(e.target.result);
-                importData(data);
-                saveToLocalStorage();
-                resolve(data.length);
-            } catch (err) {
-                reject(err);
-            }
-        };
-        reader.onerror = reject;
-        reader.readAsText(file);
-    });
 }

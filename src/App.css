@@ -263,7 +263,10 @@ html, body, #root {
 .stage-info {
   position: absolute;
   top: 70px;
-  right: 20px;
+  right: 0;
+  left: 0;
+  width: fit-content;
+  margin-inline: auto;
   display: flex;
   align-items: center;
   gap: 12px;

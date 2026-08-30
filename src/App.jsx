@@ -1,8 +1,8 @@
 // App.jsx
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import CanvasGrid from './CanvasGrid';
 import { commitSquare, getUserSquare, loadInitialData } from './mockApi';
-import { saveToLocalStorage, downloadJsonFile, loadFromJsonFile } from './storage';
+import { saveToServer, saveToLocalStorage } from './storage';
 import './App.css';
 
 const CURRENT_USER_ID = 'user_123';
@@ -10,13 +10,11 @@ const CURRENT_USER_ID = 'user_123';
 export default function App() {
   const [userColor, setUserColor] = useState('#e74c3c');
   const [mySquare, setMySquare] = useState(null);
-  const [stagedSquare, setStagedSquare] = useState(null); // NEW: Stage state
+  const [stagedSquare, setStagedSquare] = useState(null);
   const [committing, setCommitting] = useState(false);
   const [status, setStatus] = useState({ type: 'info', text: 'Click any square to stage it, then submit.' });
   const [dataLoaded, setDataLoaded] = useState(false);
-  const fileInputRef = useRef(null);
 
-  // Load initial data on mount
   useEffect(() => {
     loadInitialData().then(() => {
       setDataLoaded(true);
@@ -29,7 +27,6 @@ export default function App() {
     });
   }, []);
 
-  // Handle submit: commit staged square and save to JSON
   const handleSubmit = useCallback(async () => {
     if (!stagedSquare || committing) return;
 
@@ -48,53 +45,30 @@ export default function App() {
 
     if (result.success) {
       setMySquare({ x: stagedSquare.x, y: stagedSquare.y, color: stagedSquare.color });
-      setStagedSquare(null); // Clear stage after successful commit
+      setStagedSquare(null);
 
-      // Save to localStorage
+      // Save to both localStorage (instant fallback) and the server (public/grid-data.json)
       saveToLocalStorage();
+      const serverSaved = await saveToServer();
 
-      setStatus({
-        type: 'success',
-        text: `Claimed (${stagedSquare.x.toLocaleString()}, ${stagedSquare.y.toLocaleString()})! Data saved.`
-      });
+      if (serverSaved) {
+        setStatus({
+          type: 'success',
+          text: `Claimed! Data saved directly to public/grid-data.json.`
+        });
+      } else {
+        setStatus({
+          type: 'warn',
+          text: `Claimed locally, but failed to update grid-data.json file.`
+        });
+      }
     } else {
       setStatus({ type: 'error', text: result.error });
-      setStagedSquare(null); // Clear stage on error too
+      setStagedSquare(null);
     }
     setCommitting(false);
   }, [stagedSquare, committing]);
 
-  // Handle download JSON
-  const handleDownload = () => {
-    downloadJsonFile();
-    setStatus({ type: 'success', text: 'Downloaded grid-data.json' });
-  };
-
-  // Handle upload JSON
-  const handleUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    try {
-      const count = await loadFromJsonFile(file);
-      setStatus({ type: 'success', text: `Loaded ${count} squares from file` });
-      // Refresh user's square
-      const sq = await getUserSquare(CURRENT_USER_ID);
-      if (sq) {
-        setMySquare(sq);
-        setUserColor(sq.color);
-      }
-    } catch (err) {
-      setStatus({ type: 'error', text: 'Failed to load file' });
-    }
-
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  // Handle clear stage
   const handleClearStage = () => {
     setStagedSquare(null);
     setStatus({ type: 'info', text: 'Stage cleared' });
@@ -163,31 +137,10 @@ export default function App() {
                         onClick={handleSubmit}
                         disabled={committing}
                     >
-                      {committing ? 'Submitting...' : 'Submit'}
+                      {committing ? 'Saving...' : 'Submit & Save to File'}
                     </button>
                   </>
               )}
-
-              <button
-                  className="btn btn-secondary"
-                  onClick={handleDownload}
-              >
-                Download JSON
-              </button>
-
-              <button
-                  className="btn btn-secondary"
-                  onClick={() => fileInputRef.current?.click()}
-              >
-                Upload JSON
-              </button>
-              <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".json"
-                  style={{ display: 'none' }}
-                  onChange={handleUpload}
-              />
             </div>
           </div>
 
@@ -198,7 +151,7 @@ export default function App() {
           )}
         </footer>
 
-        {stagedSquare && (
+        {stagedSquare && typeof stagedSquare.x === 'number' && (
             <div className="stage-info">
               <div className="stage-label">STAGED</div>
               <div className="stage-coords">
