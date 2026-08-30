@@ -3,9 +3,8 @@ import { useState, useEffect, useCallback } from 'react';
 import CanvasGrid from './CanvasGrid';
 import { commitSquare, getUserSquare, loadInitialData } from './mockApi';
 import './App.css';
-import {saveNewSquareToServer} from "./storage.js";
 
-const CURRENT_USER_ID = 'user_123';
+const DEFAULT_USER_ID = 'user_123'; // Fallback for local dev
 
 export default function App() {
   const [userColor, setUserColor] = useState('#e74c3c');
@@ -15,74 +14,75 @@ export default function App() {
   const [status, setStatus] = useState({ type: 'info', text: 'Click any square to stage it, then submit.' });
   const [dataLoaded, setDataLoaded] = useState(false);
 
+  // New state for GitHub username
+  const [githubUsername, setGithubUsername] = useState('');
+  const [showUsernameModal, setShowUsernameModal] = useState(false);
+
   useEffect(() => {
     loadInitialData().then(() => {
       setDataLoaded(true);
-      return getUserSquare(CURRENT_USER_ID);
-    }).then((sq) => {
-      if (sq) {
-        setMySquare(sq);
-        setUserColor(sq.color);
-      }
+      // Try to load from localStorage if they've used it before
+      const savedName = localStorage.getItem('billionGridGithubUser');
+      if (savedName) setGithubUsername(savedName);
     });
   }, []);
 
   const handleSubmit = useCallback(async () => {
     if (!stagedSquare || committing) return;
 
+    // Require GitHub username in production
+    if (!githubUsername.trim()) {
+      setShowUsernameModal(true);
+      return;
+    }
+
     setCommitting(true);
     setStatus({
       type: 'info',
-      text: `Submitting (${stagedSquare.x.toLocaleString()}, ${stagedSquare.y.toLocaleString()})...`
+      text: `Preparing PR for (${stagedSquare.x.toLocaleString()}, ${stagedSquare.y.toLocaleString()})...`
     });
 
     try {
-      // 1. Update local mock database
-    const result = await commitSquare(
-        stagedSquare.x,
-        stagedSquare.y,
-        CURRENT_USER_ID,
-        stagedSquare.color
-    );
+      // 1. Update local mock database (for immediate UI feedback)
+      await commitSquare(stagedSquare.x, stagedSquare.y, githubUsername, stagedSquare.color);
 
-    if (result.success) {
-      // 2. Send ONLY the new square to the server to be appended to the JSON file
-      const serverSaved = await saveNewSquareToServer({
-        x: stagedSquare.x,
-        y: stagedSquare.y,
-        userId: CURRENT_USER_ID,
-        color: stagedSquare.color
+      // 2. Call Vercel API to create the Pull Request
+      const response = await fetch('/api/create-pr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          x: stagedSquare.x,
+          y: stagedSquare.y,
+          color: stagedSquare.color,
+          githubUsername: githubUsername.trim()
+        })
       });
 
-      if (serverSaved) {
+      const result = await response.json();
+
+      if (result.success) {
+        localStorage.setItem('billionGridGithubUser', githubUsername.trim());
         setStatus({
           type: 'success',
-          text: 'Claimed and saved! Refreshing page...'
+          text: 'PR Created! Redirecting to GitHub...'
         });
         setStagedSquare(null);
 
-          // 3. Automatically refresh the page after 1 second
+        // Open the PR in a new tab after a short delay
         setTimeout(() => {
-          window.location.reload();
-        }, 1000);
+          window.open(result.prUrl, '_blank');
+          window.location.reload(); // Refresh to show updated state
+        }, 1500);
       } else {
-        setStatus({
-          type: 'warn',
-          text: 'Claimed locally, but failed to update grid-data.json file.'
-        });
+        setStatus({ type: 'error', text: result.error || 'Failed to create PR' });
         setCommitting(false);
-      }
-    } else {
-      setStatus({ type: 'error', text: result.error });
-      setStagedSquare(null);
-    setCommitting(false);
       }
     } catch (error) {
       console.error('Error during submit:', error);
-      setStatus({ type: 'error', text: 'An error occurred during submission.' });
+      setStatus({ type: 'error', text: 'Network error. Please try again.' });
       setCommitting(false);
     }
-  }, [stagedSquare, committing]);
+  }, [stagedSquare, committing, githubUsername]);
 
   const handleClearStage = () => {
     setStagedSquare(null);
@@ -95,6 +95,32 @@ export default function App() {
 
   return (
       <div className="app">
+        {/* Username Modal */}
+        {showUsernameModal && (
+            <div className="modal-overlay">
+              <div className="modal">
+                <h3>Enter your GitHub Username</h3>
+                <p>This will be used as your User ID and to create the Pull Request.</p>
+                <input
+                    type="text"
+                    placeholder="e.g., homayounmmdy"
+                    value={githubUsername}
+                    onChange={(e) => setGithubUsername(e.target.value)}
+                    autoFocus
+                />
+                <div className="modal-actions">
+                  <button className="btn btn-secondary" onClick={() => setShowUsernameModal(false)}>Cancel</button>
+                  <button className="btn btn-submit" onClick={() => {
+                    if (githubUsername.trim()) {
+                      setShowUsernameModal(false);
+                      handleSubmit();
+                    }
+                  }}>Continue</button>
+                </div>
+              </div>
+            </div>
+        )}
+
         <header className="top-bar">
           <div className="brand">
             <span className="logo">◼</span>
@@ -113,16 +139,16 @@ export default function App() {
               />
             </label>
 
-            <div className="user-badge">
+            <div className="user-badge" onClick={() => setShowUsernameModal(true)} style={{ cursor: 'pointer' }}>
               <span className="dot" style={{ background: userColor }} />
-              {CURRENT_USER_ID}
+              {githubUsername || 'Set GitHub User'}
             </div>
           </div>
         </header>
 
         <main className="main">
           <CanvasGrid
-              userId={CURRENT_USER_ID}
+              userId={githubUsername || DEFAULT_USER_ID}
               userColor={userColor}
               stagedSquare={stagedSquare}
               setStagedSquare={setStagedSquare}
@@ -140,19 +166,11 @@ export default function App() {
             <div className="action-buttons">
               {stagedSquare && (
                   <>
-                    <button
-                        className="btn btn-clear"
-                        onClick={handleClearStage}
-                        disabled={committing}
-                    >
+                    <button className="btn btn-clear" onClick={handleClearStage} disabled={committing}>
                       Clear Stage
                     </button>
-                    <button
-                        className="btn btn-submit"
-                        onClick={handleSubmit}
-                        disabled={committing}
-                    >
-                      {committing ? 'Saving...' : 'Submit & Save to File'}
+                    <button className="btn btn-submit" onClick={handleSubmit} disabled={committing}>
+                      {committing ? 'Creating PR...' : 'Submit & Create PR'}
                     </button>
                   </>
               )}
@@ -172,10 +190,7 @@ export default function App() {
               <div className="stage-coords">
                 ({stagedSquare.x.toLocaleString()}, {stagedSquare.y.toLocaleString()})
               </div>
-              <div
-                  className="stage-color"
-                  style={{ background: stagedSquare.color }}
-              />
+              <div className="stage-color" style={{ background: stagedSquare.color }} />
             </div>
         )}
       </div>

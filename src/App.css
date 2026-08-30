@@ -309,3 +309,59 @@ html, body, #root {
   border: 2px solid #ffffff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
+
+/* Add to App.css */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 24px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.modal h3 {
+  margin: 0 0 8px 0;
+  color: #f1f5f9;
+  font-size: 18px;
+}
+
+.modal p {
+  margin: 0 0 16px 0;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.modal input {
+  width: 100%;
+  padding: 10px 12px;
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 14px;
+  margin-bottom: 16px;
+  outline: none;
+}
+
+.modal input:focus {
+  border-color: #38bdf8;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
