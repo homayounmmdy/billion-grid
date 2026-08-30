@@ -25,12 +25,67 @@ function seedDatabase() {
     DB.set(`${x},${y}`, { userId, color });
   }
 }
-seedDatabase();
 
 /**
- * Fetch all claimed squares within the given viewport bounds.
- * In a real backend this would be a spatial query (e.g. PostGIS, Redis GEO).
+ * Load initial data from external source (localStorage or JSON file)
  */
+export async function loadInitialData() {
+  // Try localStorage first
+  const stored = localStorage.getItem('billionGridData');
+  if (stored) {
+    try {
+      const data = JSON.parse(stored);
+      for (const item of data) {
+        DB.set(`${item.x},${item.y}`, { userId: item.userId, color: item.color });
+      }
+      console.log(`Loaded ${data.length} squares from localStorage`);
+      return;
+    } catch (e) {
+      console.error('Failed to parse localStorage data:', e);
+    }
+  }
+
+  // Try fetching from public/grid-data.json
+  try {
+    const response = await fetch('/grid-data.json');
+    if (response.ok) {
+      const data = await response.json();
+      for (const item of data) {
+        DB.set(`${item.x},${item.y}`, { userId: item.userId, color: item.color });
+      }
+      console.log(`Loaded ${data.length} squares from grid-data.json`);
+      return;
+    }
+  } catch (e) {
+    console.log('No grid-data.json found, using seed data');
+  }
+
+  // Fall back to seed data
+seedDatabase();
+}
+
+/**
+ * Export all data to JSON format
+ */
+export function exportData() {
+  const data = [];
+  for (const [key, value] of DB.entries()) {
+    const [x, y] = key.split(',').map(Number);
+    data.push({ x, y, userId: value.userId, color: value.color });
+  }
+  return data;
+}
+
+/**
+ * Import data from JSON array
+ */
+export function importData(data) {
+  DB.clear();
+  for (const item of data) {
+    DB.set(`${item.x},${item.y}`, { userId: item.userId, color: item.color });
+  }
+}
+
 export async function getVisibleSquares(minX, minY, maxX, maxY) {
   // Clamp to grid bounds
   minX = Math.max(0, Math.floor(minX));

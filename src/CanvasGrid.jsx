@@ -1,56 +1,28 @@
 // CanvasGrid.jsx
-// This component owns the <canvas> and handles:
-//   - Pan (mouse drag)
-//   - Zoom (mouse wheel, centered on cursor)
-//   - Coordinate conversion between screen pixels and grid units
-//   - Viewport culling: only fetches & draws squares currently visible
-//   - Click-to-claim interaction
-//
-// COORDINATE SYSTEM:
-//   - Grid space: (0,0) is top-left of the 1B x 1B grid. Each square is 1 unit.
-//   - Screen space: (0,0) is top-left of the canvas element.
-//   - Transform: screenX = gridX * scale + offsetX
-//                gridX  = (screenX - offsetX) / scale
-//   - `scale` = pixels per grid square. At scale=1, 1 grid square = 1 pixel.
-
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { getVisibleSquares, GRID_SIZE_EXPORT as GRID_SIZE } from './mockApi';
 
-const MIN_SCALE = 0.0000005; // Very zoomed out
-const MAX_SCALE = 64;        // Very zoomed in (each square = 64px)
+const MIN_SCALE = 0.0000005;
+const MAX_SCALE = 64;
 
-// Checkered pattern colors for empty squares
 const CHECK_A = '#f5f5f5';
 const CHECK_B = '#e0e0e0';
 
 export default function CanvasGrid({
-  userId,
-  userColor,
-  onSquareClaimed,
-  onStatusMessage,
-  committing,
-}) {
+                                     userId,
+                                     userColor,
+                                     stagedSquare,
+                                     setStagedSquare,
+                                     committing,
+                                   }) {
   const canvasRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Viewport transform state
-  // offset = screen-space translation; scale = pixels per grid unit
-  const [view, setView] = useState({
-    offsetX: 0,
-    offsetY: 0,
-    scale: 1,
-  });
-
-  // Size of the canvas in CSS pixels
+  const [view, setView] = useState({ offsetX: 0, offsetY: 0, scale: 1 });
   const [size, setSize] = useState({ width: 800, height: 600 });
-
-  // Claimed squares currently visible (fetched from mock API)
   const [claimedSquares, setClaimedSquares] = useState([]);
-
-  // The grid square currently under the cursor (for hover highlight)
   const [hoveredSquare, setHoveredSquare] = useState(null);
 
-  // Refs for drag state (avoid re-renders during drag)
   const dragState = useRef({
     isDragging: false,
     startX: 0,
@@ -59,13 +31,10 @@ export default function CanvasGrid({
     startOffsetY: 0,
   });
 
-  // Refs so event handlers always see latest values without re-binding
   const viewRef = useRef(view);
   viewRef.current = view;
-  const sizeRef = useRef(size);
-  sizeRef.current = size;
 
-  // ---------------- ResizeObserver ----------------
+  // ResizeObserver
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -79,10 +48,9 @@ export default function CanvasGrid({
     return () => ro.disconnect();
   }, []);
 
-  // ---------------- Initial view: center on middle of grid ----------------
+  // Initial view
   useEffect(() => {
     if (size.width && size.height) {
-      // Start zoomed in a bit so the user sees individual squares
       const initialScale = 8;
       const centerGrid = GRID_SIZE / 2;
       setView({
@@ -91,26 +59,20 @@ export default function CanvasGrid({
         offsetY: size.height / 2 - centerGrid * initialScale,
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size.width, size.height]);
 
-  // ---------------- Viewport culling: fetch visible squares ----------------
-  // Recompute whenever view or size changes. We debounce slightly via
-  // requestAnimationFrame to avoid hammering the mock API during pan/zoom.
+  // Viewport culling
   useEffect(() => {
     let cancelled = false;
     const raf = requestAnimationFrame(async () => {
       const { offsetX, offsetY, scale } = view;
       const { width, height } = size;
 
-      // Convert viewport corners to grid coordinates
       const minGridX = -offsetX / scale;
       const minGridY = -offsetY / scale;
       const maxGridX = (width - offsetX) / scale;
       const maxGridY = (height - offsetY) / scale;
 
-      // If we're so zoomed out that we'd need to fetch millions of squares,
-      // just skip the fetch — we won't be able to render them anyway.
       const visibleSquaresCount = (maxGridX - minGridX) * (maxGridY - minGridY);
       if (visibleSquaresCount > 500_000) {
         setClaimedSquares([]);
@@ -130,7 +92,7 @@ export default function CanvasGrid({
     };
   }, [view, size]);
 
-  // ---------------- Canvas drawing ----------------
+  // Canvas drawing
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -138,30 +100,23 @@ export default function CanvasGrid({
     const { offsetX, offsetY, scale } = view;
     const { width, height } = size;
 
-    // Handle high-DPI displays
     const dpr = window.devicePixelRatio || 1;
     canvas.width = width * dpr;
     canvas.height = height * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // Clear
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
-    // Compute visible grid bounds
     const minGridX = Math.max(0, Math.floor(-offsetX / scale));
     const minGridY = Math.max(0, Math.floor(-offsetY / scale));
     const maxGridX = Math.min(GRID_SIZE - 1, Math.ceil((width - offsetX) / scale));
     const maxGridY = Math.min(GRID_SIZE - 1, Math.ceil((height - offsetY) / scale));
 
-    // --- Render the checkered pattern ---
-    // If each square is smaller than ~0.5px, individual squares are invisible.
-    // We still draw the checkered pattern by using a 2x2 tile pattern.
     const squarePixelSize = scale;
 
+    // 1. Draw checkered background
     if (squarePixelSize >= 0.5) {
-      // Draw checkered background for visible region
-      // Optimization: batch by color to minimize fillStyle changes
       for (let gy = minGridY; gy <= maxGridY; gy++) {
         const screenY = gy * scale + offsetY;
         const isEvenRow = gy % 2 === 0;
@@ -169,12 +124,10 @@ export default function CanvasGrid({
           const screenX = gx * scale + offsetX;
           const isEvenCol = gx % 2 === 0;
           ctx.fillStyle = (isEvenRow === isEvenCol) ? CHECK_A : CHECK_B;
-          ctx.fillRect(screenX, screenY, scale + 0.5, scale + 0.5); // +0.5 avoids seams
+          ctx.fillRect(screenX, screenY, scale + 0.5, scale + 0.5);
         }
       }
     } else {
-      // Very zoomed out: draw a pattern fill instead of per-square
-      // Create a 2x2 checkered pattern at the appropriate scale
       const patSize = 2;
       const patCanvas = document.createElement('canvas');
       patCanvas.width = patSize;
@@ -190,34 +143,57 @@ export default function CanvasGrid({
       ctx.fillRect(0, 0, width, height);
     }
 
-    // --- Render claimed squares on top ---
+    // 2. Render claimed squares
     for (const sq of claimedSquares) {
       const sx = sq.x * scale + offsetX;
       const sy = sq.y * scale + offsetY;
       ctx.fillStyle = sq.color;
       ctx.fillRect(sx, sy, scale + 0.5, scale + 0.5);
 
-      // If the square belongs to the current user, draw a highlight border
       if (sq.userId === userId) {
         ctx.strokeStyle = '#000000';
-        ctx.lineWidth = Math.max(1, scale * 0.1);
+        ctx.lineWidth = Math.max(1, scale * 0.15);
         ctx.strokeRect(sx, sy, scale, scale);
       }
     }
 
-    // --- Hover highlight ---
-    if (hoveredSquare && !committing) {
-      const sx = hoveredSquare.x * scale + offsetX;
-      const sy = hoveredSquare.y * scale + offsetY;
+    // 3. Render STAGED square (Static, high-visibility highlight)
+    if (stagedSquare && typeof stagedSquare.x === 'number' && typeof stagedSquare.y === 'number') {
+      const sx = stagedSquare.x * scale + offsetX;
+      const sy = stagedSquare.y * scale + offsetY;
+
+      // Semi-transparent fill
+      ctx.fillStyle = stagedSquare.color;
+      ctx.globalAlpha = 0.7;
+      ctx.fillRect(sx, sy, scale + 0.5, scale + 0.5);
+      ctx.globalAlpha = 1.0;
+
+      // Thick dashed border
       ctx.strokeStyle = '#2563eb';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = Math.max(2, scale * 0.1);
+      ctx.setLineDash([Math.max(4, scale * 0.2), Math.max(4, scale * 0.2)]);
       ctx.strokeRect(sx + 1, sy + 1, scale - 2, scale - 2);
+      ctx.setLineDash([]); // Reset
     }
 
-    // --- Grid lines at high zoom ---
+    // 4. Hover highlight (only if not staged and valid)
+    if (hoveredSquare && typeof hoveredSquare.x === 'number' && !committing) {
+      const isStaged = stagedSquare && stagedSquare.x === hoveredSquare.x && stagedSquare.y === hoveredSquare.y;
+      if (!isStaged) {
+        const sx = hoveredSquare.x * scale + offsetX;
+        const sy = hoveredSquare.y * scale + offsetY;
+        ctx.strokeStyle = '#2563eb';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+        ctx.strokeRect(sx + 1, sy + 1, scale - 2, scale - 2);
+      }
+    }
+
+    // 5. Grid lines at high zoom
     if (squarePixelSize >= 8) {
       ctx.strokeStyle = 'rgba(0,0,0,0.08)';
       ctx.lineWidth = 1;
+      ctx.setLineDash([]);
       ctx.beginPath();
       for (let gx = minGridX; gx <= maxGridX + 1; gx++) {
         const sx = gx * scale + offsetX;
@@ -231,9 +207,8 @@ export default function CanvasGrid({
       }
       ctx.stroke();
     }
-  }, [view, size, claimedSquares, hoveredSquare, userId, committing]);
+  }, [view, size, claimedSquares, hoveredSquare, userId, committing, stagedSquare]);
 
-  // ---------------- Coordinate helpers ----------------
   const screenToGrid = useCallback((screenX, screenY) => {
     const { offsetX, offsetY, scale } = viewRef.current;
     return {
@@ -242,9 +217,7 @@ export default function CanvasGrid({
     };
   }, []);
 
-  // ---------------- Mouse handlers ----------------
   const handleMouseDown = (e) => {
-    const rect = canvasRef.current.getBoundingClientRect();
     dragState.current = {
       isDragging: true,
       startX: e.clientX,
@@ -253,7 +226,6 @@ export default function CanvasGrid({
       startOffsetY: viewRef.current.offsetY,
       moved: false,
     };
-    // Prevent text selection while dragging
     e.preventDefault();
   };
 
@@ -262,7 +234,6 @@ export default function CanvasGrid({
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
 
-    // Update hover
     const g = screenToGrid(mx, my);
     if (g.x >= 0 && g.y >= 0 && g.x < GRID_SIZE && g.y < GRID_SIZE) {
       setHoveredSquare(g);
@@ -270,7 +241,6 @@ export default function CanvasGrid({
       setHoveredSquare(null);
     }
 
-    // Handle drag
     const ds = dragState.current;
     if (ds.isDragging) {
       const dx = e.clientX - ds.startX;
@@ -287,13 +257,21 @@ export default function CanvasGrid({
   const handleMouseUp = (e) => {
     const ds = dragState.current;
     if (ds.isDragging && !ds.moved) {
-      // It was a click, not a drag -> attempt to claim
       const rect = canvasRef.current.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
       const g = screenToGrid(mx, my);
+
       if (g.x >= 0 && g.y >= 0 && g.x < GRID_SIZE && g.y < GRID_SIZE) {
-        onSquareClaimed(g.x, g.y);
+        const claimed = claimedSquares.find(
+            (sq) => sq.x === g.x && sq.y === g.y && sq.userId !== userId
+        );
+
+        if (claimed) {
+          return; // Can't stage a square owned by someone else
+        }
+
+        setStagedSquare({ x: g.x, y: g.y, color: userColor });
       }
     }
     ds.isDragging = false;
@@ -304,10 +282,6 @@ export default function CanvasGrid({
     setHoveredSquare(null);
   };
 
-  // ---------------- Zoom (wheel) ----------------
-  // Zoom is centered on the cursor position so the point under the cursor
-  // stays fixed on screen. Math:
-  //   newOffset = cursorScreen - (cursorScreen - oldOffset) * (newScale / oldScale)
   const handleWheel = (e) => {
     e.preventDefault();
     const rect = canvasRef.current.getBoundingClientRect();
@@ -328,30 +302,35 @@ export default function CanvasGrid({
     });
   };
 
-  // Attach wheel with { passive: false } so we can preventDefault
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     canvas.addEventListener('wheel', handleWheel, { passive: false });
     return () => canvas.removeEventListener('wheel', handleWheel);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Safe fallback for rendering coordinates
+  const formatCoord = (val) => (typeof val === 'number' ? val.toLocaleString() : '0');
+
   return (
-    <div ref={containerRef} className="canvas-container">
-      <canvas
-        ref={canvasRef}
-        style={{ width: size.width, height: size.height, cursor: dragState.current.isDragging ? 'grabbing' : 'crosshair' }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-      />
-      {hoveredSquare && (
-        <div className="coords-badge">
-          ({hoveredSquare.x.toLocaleString()}, {hoveredSquare.y.toLocaleString()})
-        </div>
-      )}
-    </div>
+      <div ref={containerRef} className="canvas-container">
+        <canvas
+            ref={canvasRef}
+            style={{
+              width: size.width,
+              height: size.height,
+              cursor: dragState.current.isDragging ? 'grabbing' : 'crosshair'
+            }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+        />
+        {hoveredSquare && typeof hoveredSquare.x === 'number' && (
+            <div className="coords-badge">
+              ({formatCoord(hoveredSquare.x)}, {formatCoord(hoveredSquare.y)})
+            </div>
+        )}
+      </div>
   );
 }
