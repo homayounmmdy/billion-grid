@@ -36,8 +36,8 @@ export default function App() {
       return;
     }
 
-    // 1. Prepare the issue data
-    const issueTitle = `🎯 Claim: Square (${stagedSquare.x.toLocaleString()}, ${stagedSquare.y.toLocaleString()})`;
+    // 1. Exact format the CI expects
+    const issueTitle = `Claim: Square (${stagedSquare.x.toLocaleString()}, ${stagedSquare.y.toLocaleString()})`;
     const issueBody = `X: ${stagedSquare.x}\nY: ${stagedSquare.y}\nColor: ${stagedSquare.color}\nUserId: ${finalUsername}`;
     const labels = 'block-claim';
 
@@ -51,7 +51,7 @@ export default function App() {
 
         setTimeout(() => {
       window.open(issueUrl, '_blank');
-      setStagedSquare(null); // Clear stage locally
+      setStagedSquare(null);
     }, 500);
   }, [stagedSquare, githubUsername]);
   const handleClearStage = () => {
