@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+
+# Run the grid validation script before every commit
+node scripts/validate-grid.js
+
