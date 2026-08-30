@@ -1,30 +1,29 @@
 // storage.js
-import { exportData } from './mockApi';
 
-export async function saveToServer() {
-  const data = exportData();
+/**
+ * Send ONLY the newly claimed square to the server.
+ * The server will handle reading the existing file and appending it safely.
+ */
+export async function saveNewSquareToServer(newSquare) {
   try {
-    console.log('Attempting to save to server...', data.length, 'squares');
+    console.log('Attempting to save new square to server...', newSquare);
 
     const response = await fetch('/api/save-grid', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(data),
+      body: JSON.stringify(newSquare),
     });
 
-    // Check if the response is actually OK before parsing JSON
     if (!response.ok) {
       console.error('Server responded with status:', response.status);
-      const text = await response.text();
-      console.error('Response body:', text);
       return false;
     }
 
     const result = await response.json();
     if (result.success) {
-      console.log('✅ Successfully saved to public/grid-data.json via server');
+      console.log('✅ Successfully appended to public/grid-data.json');
       return true;
     } else {
       console.error('❌ Server reported failure:', result.error);
@@ -34,9 +33,4 @@ export async function saveToServer() {
     console.error('❌ Network error while saving to server:', error);
     return false;
   }
-}
-
-export function saveToLocalStorage() {
-    const data = exportData();
-    localStorage.setItem('billionGridData', JSON.stringify(data));
 }

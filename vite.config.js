@@ -26,18 +26,28 @@ export default defineConfig({
 
             req.on('end', () => {
               try {
-                const data = JSON.parse(body);
+                const newSquare = JSON.parse(body); // { x, y, userId, color }
                 const filePath = path.resolve(__dirname, 'public', 'grid-data.json');
 
-                // Ensure the public directory exists
-                const dir = path.dirname(filePath);
-                if (!fs.existsSync(dir)) {
-                  fs.mkdirSync(dir, { recursive: true });
+                // 1. Read existing data
+                let existingData = [];
+                if (fs.existsSync(filePath)) {
+                  const fileContent = fs.readFileSync(filePath, 'utf-8');
+                  existingData = JSON.parse(fileContent || '[]');
                 }
 
-                // Write the file
-                fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
-                console.log(`🟢 Successfully saved ${data.length} squares to public/grid-data.json`);
+                // 2. Add timestamp to the new square
+                const squareWithTimestamp = {
+                  ...newSquare,
+                  timestamp: new Date().toISOString()
+                };
+
+                // 3. Simply append to the list (NO filtering - keep complete history)
+                existingData.push(squareWithTimestamp);
+
+                // 4. Write back to file
+                fs.writeFileSync(filePath, JSON.stringify(existingData, null, 2), 'utf-8');
+                console.log(`🟢 Successfully appended square to grid-data.json (Total: ${existingData.length} squares)`);
 
                 res.statusCode = 200;
                 res.setHeader('Content-Type', 'application/json');

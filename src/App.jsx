@@ -2,8 +2,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import CanvasGrid from './CanvasGrid';
 import { commitSquare, getUserSquare, loadInitialData } from './mockApi';
-import { saveToServer, saveToLocalStorage } from './storage';
 import './App.css';
+import {saveNewSquareToServer} from "./storage.js";
 
 const CURRENT_USER_ID = 'user_123';
 
@@ -36,6 +36,8 @@ export default function App() {
       text: `Submitting (${stagedSquare.x.toLocaleString()}, ${stagedSquare.y.toLocaleString()})...`
     });
 
+    try {
+      // 1. Update local mock database
     const result = await commitSquare(
         stagedSquare.x,
         stagedSquare.y,
@@ -44,29 +46,42 @@ export default function App() {
     );
 
     if (result.success) {
-      setMySquare({ x: stagedSquare.x, y: stagedSquare.y, color: stagedSquare.color });
-      setStagedSquare(null);
-
-      // Save to both localStorage (instant fallback) and the server (public/grid-data.json)
-      saveToLocalStorage();
-      const serverSaved = await saveToServer();
+      // 2. Send ONLY the new square to the server to be appended to the JSON file
+      const serverSaved = await saveNewSquareToServer({
+        x: stagedSquare.x,
+        y: stagedSquare.y,
+        userId: CURRENT_USER_ID,
+        color: stagedSquare.color
+      });
 
       if (serverSaved) {
         setStatus({
           type: 'success',
-          text: `Claimed! Data saved directly to public/grid-data.json.`
+          text: 'Claimed and saved! Refreshing page...'
         });
+        setStagedSquare(null);
+
+          // 3. Automatically refresh the page after 1 second
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
       } else {
         setStatus({
           type: 'warn',
-          text: `Claimed locally, but failed to update grid-data.json file.`
+          text: 'Claimed locally, but failed to update grid-data.json file.'
         });
+        setCommitting(false);
       }
     } else {
       setStatus({ type: 'error', text: result.error });
       setStagedSquare(null);
-    }
     setCommitting(false);
+      }
+    } catch (error) {
+      console.error('Error during submit:', error);
+      setStatus({ type: 'error', text: 'An error occurred during submission.' });
+      setCommitting(false);
+    }
   }, [stagedSquare, committing]);
 
   const handleClearStage = () => {

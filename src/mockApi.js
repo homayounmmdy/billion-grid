@@ -1,73 +1,75 @@
 // mockApi.js
 const GRID_SIZE = 1_000_000_000;
-const CENTER = GRID_SIZE / 2;
+
+// In-memory "database"
 const DB = new Map();
 
-function seedDatabase() {
-  const seedColors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6'];
-  for (let i = 0; i < 50; i++) {
-    const x = Math.floor(CENTER - 500 + Math.random() * 1000);
-    const y = Math.floor(CENTER - 500 + Math.random() * 1000);
-    const userId = `user_${Math.floor(Math.random() * 10)}`;
-    const color = seedColors[Math.floor(Math.random() * seedColors.length)];
-    DB.set(`${x},${y}`, { userId, color });
-  }
-}
-
+/**
+ * Load initial data from public/grid-data.json
+ */
 export async function loadInitialData() {
-  // 1. Try loading from the actual public file first
   try {
-    const response = await fetch('/grid-data.json?t=' + Date.now()); // t= prevents aggressive caching
+    const response = await fetch('/grid-data.json?t=' + Date.now());
+
     if (response.ok) {
       const data = await response.json();
-      if (data.length > 0) {
+
+      if (Array.isArray(data) && data.length > 0) {
         for (const item of data) {
-          DB.set(`${item.x},${item.y}`, { userId: item.userId, color: item.color });
+          // Store with all fields including timestamp
+          DB.set(`${item.x},${item.y}`, {
+            userId: item.userId,
+            color: item.color,
+            timestamp: item.timestamp || null
+          });
         }
-        console.log(`Loaded ${data.length} squares from public/grid-data.json`);
-        return;
+        console.log(`✅ Loaded ${data.length} squares from public/grid-data.json`);
+      } else {
+        console.log('ℹ️ grid-data.json is empty. Starting with a clean, blank grid.');
       }
+    } else {
+      console.log('⚠️ Could not fetch grid-data.json. Starting with a clean, blank grid.');
     }
   } catch (e) {
-    console.log('No grid-data.json found or empty, falling back to localStorage or seed.');
+    console.log('⚠️ Error loading grid-data.json. Starting with a clean, blank grid.', e);
   }
-
-  // 2. Fallback to localStorage
-  const stored = localStorage.getItem('billionGridData');
-  if (stored) {
-    try {
-      const data = JSON.parse(stored);
-      for (const item of data) {
-        DB.set(`${item.x},${item.y}`, { userId: item.userId, color: item.color });
-      }
-      console.log(`Loaded ${data.length} squares from localStorage`);
-      return;
-    } catch (e) {
-      console.error('Failed to parse localStorage data:', e);
-    }
-  }
-
-  // 3. Final fallback: seed data
-  seedDatabase();
 }
 
+/**
+ * Export all data to JSON format (includes timestamp)
+ */
 export function exportData() {
   const data = [];
   for (const [key, value] of DB.entries()) {
     const [x, y] = key.split(',').map(Number);
-    data.push({ x, y, userId: value.userId, color: value.color });
+    data.push({
+      x,
+      y,
+      userId: value.userId,
+      color: value.color,
+      timestamp: value.timestamp || null
+    });
   }
   return data;
 }
 
+/**
+ * Import data from JSON array
+ */
 export function importData(data) {
   DB.clear();
   for (const item of data) {
-    DB.set(`${item.x},${item.y}`, { userId: item.userId, color: item.color });
+    DB.set(`${item.x},${item.y}`, {
+      userId: item.userId,
+      color: item.color,
+      timestamp: item.timestamp || null
+    });
   }
 }
 
-// ... (keep getVisibleSquares, commitSquare, getUserSquare exactly as they were) ...
+/**
+ * Fetch claimed squares within the given viewport bounds
+ */
 export async function getVisibleSquares(minX, minY, maxX, maxY) {
   minX = Math.max(0, Math.floor(minX));
   minY = Math.max(0, Math.floor(minY));
@@ -80,12 +82,21 @@ export async function getVisibleSquares(minX, minY, maxX, maxY) {
   for (const [key, value] of DB.entries()) {
     const [x, y] = key.split(',').map(Number);
     if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
-      results.push({ x, y, userId: value.userId, color: value.color });
+      results.push({
+        x,
+        y,
+        userId: value.userId,
+        color: value.color,
+        timestamp: value.timestamp || null
+      });
     }
   }
   return results;
 }
 
+/**
+ * Attempt to claim a square.
+ */
 export async function commitSquare(x, y, userId, color) {
   await new Promise((r) => setTimeout(r, 1000));
 
@@ -104,6 +115,7 @@ export async function commitSquare(x, y, userId, color) {
     return { success: false, error: 'You already own this square' };
   }
 
+  // Release user's previous square (One square per user rule in UI)
   for (const [k, v] of DB.entries()) {
     if (v.userId === userId) {
       DB.delete(k);
@@ -111,16 +123,23 @@ export async function commitSquare(x, y, userId, color) {
     }
   }
 
-  DB.set(key, { userId, color });
+  DB.set(key, {
+    userId,
+    color,
+    timestamp: new Date().toISOString()
+  });
   return { success: true };
 }
 
+/**
+ * Fetch the square currently owned by a user (if any).
+ */
 export async function getUserSquare(userId) {
   await new Promise((r) => setTimeout(r, 50));
   for (const [key, value] of DB.entries()) {
     if (value.userId === userId) {
       const [x, y] = key.split(',').map(Number);
-      return { x, y, color: value.color };
+      return { x, y, color: value.color, timestamp: value.timestamp || null };
     }
   }
   return null;
