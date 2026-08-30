@@ -68,11 +68,10 @@ export default function App() {
         });
         setStagedSquare(null);
 
-        // Open the PR in a new tab after a short delay
+        // Redirect the current window directly to the new PR after 1 second
         setTimeout(() => {
-          window.open(result.prUrl, '_blank');
-          window.location.reload(); // Refresh to show updated state
-        }, 1500);
+          window.location.href = result.prUrl;
+        }, 1000);
       } else {
         setStatus({ type: 'error', text: result.error || 'Failed to create PR' });
         setCommitting(false);
