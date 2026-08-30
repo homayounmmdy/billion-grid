@@ -1,6 +1,5 @@
 // api/create-pr.js
 export default async function handler(req, res) {
-    // Only allow POST requests
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
@@ -13,41 +12,41 @@ export default async function handler(req, res) {
 
     const token = process.env.GITHUB_TOKEN;
     if (!token) {
-        console.error('GITHUB_TOKEN is not set in environment variables');
-        return res.status(500).json({ error: 'Server configuration error' });
+        console.error('❌ GITHUB_TOKEN is missing in Vercel Environment Variables!');
+        return res.status(500).json({ error: 'Server configuration error: Missing GITHUB_TOKEN' });
     }
 
     const owner = 'homayounmmdy';
     const repo = 'billion-grid';
-    const branchName = `claim/${githubUsername}-${Date.now()}`;
+    const branchName = `claim/${githubUsername.replace(/[^a-zA-Z0-9_-]/g, '')}-${Date.now()}`;
     const filePath = 'public/grid-data.json';
     const timestamp = new Date().toISOString();
     const newSquare = { x, y, userId: githubUsername, color, timestamp };
 
     try {
-        // 1. Fetch the current file content and its SHA
+        console.log(`🟢 Starting PR creation for @${githubUsername} at (${x}, ${y})`);
+
+        // 1. Fetch current file
         let currentContent = '[]';
         let fileSha = '';
 
-        try {
-            const fileRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=main`, {
-                headers: {
-                    'Authorization': `token ${token}`,
-                    'Accept': 'application/vnd.github.v3+json'
-                }
-            });
-
-            if (fileRes.ok) {
-                const fileData = await fileRes.json();
-                fileSha = fileData.sha;
-                currentContent = Buffer.from(fileData.content, 'base64').toString('utf-8');
+        const fileRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=main`, {
+            headers: {
+                'Authorization': `token ${token}`,
+                'Accept': 'application/vnd.github.v3+json'
             }
-        } catch (err) {
-            // File might not exist yet, which is fine. We'll start with an empty array.
-            console.log('File does not exist yet, starting fresh.');
+        });
+
+        if (fileRes.ok) {
+            const fileData = await fileRes.json();
+            fileSha = fileData.sha;
+            currentContent = Buffer.from(fileData.content, 'base64').toString('utf-8');
+            console.log('✅ Successfully fetched existing grid-data.json');
+        } else {
+            console.log('ℹ️ File does not exist yet or is empty. Starting fresh.');
         }
 
-        // 2. Parse, append, and re-encode the content
+        // 2. Parse, append, and encode
         let gridData = [];
         try {
             gridData = JSON.parse(currentContent);
@@ -58,7 +57,14 @@ export default async function handler(req, res) {
         gridData.push(newSquare);
         const newContentBase64 = Buffer.from(JSON.stringify(gridData, null, 2)).toString('base64');
 
-        // 3. Create the new file (this automatically creates the new branch)
+        // 3. Create commit on new branch
+        const commitPayload = {
+            message: `chore: add square claim by @${githubUsername}`,
+            content: newContentBase64,
+            branch: branchName
+        };
+        if (fileSha) commitPayload.sha = fileSha;
+
         const commitRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`, {
             method: 'PUT',
             headers: {
@@ -66,32 +72,19 @@ export default async function handler(req, res) {
                 'Accept': 'application/vnd.github.v3+json',
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                message: `chore: add square claim by @${githubUsername}`,
-                content: newContentBase64,
-                sha: fileSha || undefined, // Required if file exists
-                branch: branchName
-            })
+            body: JSON.stringify(commitPayload)
         });
 
         if (!commitRes.ok) {
             const errData = await commitRes.json();
-            console.error('GitHub API Commit Error:', errData);
-            return res.status(500).json({ error: 'Failed to create commit on GitHub' });
+            console.error('❌ GitHub API Commit Error:', JSON.stringify(errData, null, 2));
+            return res.status(500).json({ error: `Failed to create commit: ${errData.message || 'Unknown error'}` });
         }
+        console.log('✅ Successfully created commit on branch:', branchName);
 
-        // 4. Create the Pull Request
+        // 4. Create Pull Request
         const prTitle = `🎯 Claim: Square (${x.toLocaleString()}, ${y.toLocaleString()}) by @${githubUsername}`;
-        const prBody = `## 🎯 New Square Claim
-
-**User:** @${githubUsername}  
-**Coordinates:** (\`${x.toLocaleString()}\`, \`${y.toLocaleString()}\`)  
-**Color:** \`${color}\`  
-**Timestamp:** \`${timestamp}\`
-
----
-*This PR was automatically generated by the [Billion Grid App](https://billion-grid.vercel.app/).*  
-*The GitHub Actions workflow will automatically validate that only one square was added.*`;
+        const prBody = `## 🎯 New Square Claim\n\n**User:** @${githubUsername}\n**Coordinates:** (\`${x.toLocaleString()}\`, \`${y.toLocaleString()}\`)\n**Color:** \`${color}\`\n**Timestamp:** \`${timestamp}\`\n\n---\n*This PR was automatically generated by the [Billion Grid App](https://billion-grid.vercel.app/).*`;
 
         const prRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
             method: 'POST',
@@ -110,13 +103,13 @@ export default async function handler(req, res) {
 
         if (!prRes.ok) {
             const errData = await prRes.json();
-            console.error('GitHub API PR Error:', errData);
-            return res.status(500).json({ error: 'Failed to create Pull Request' });
+            console.error('❌ GitHub API PR Error:', JSON.stringify(errData, null, 2));
+            return res.status(500).json({ error: `Failed to create PR: ${errData.message || 'Unknown error'}` });
         }
 
         const prData = await prRes.json();
+        console.log('✅ Successfully created PR:', prData.html_url);
 
-        // 5. Success! Return the PR URL to the frontend
         return res.status(200).json({
             success: true,
             prUrl: prData.html_url,
@@ -124,7 +117,7 @@ export default async function handler(req, res) {
         });
 
     } catch (error) {
-        console.error('Server Error:', error);
+        console.error('❌ Unhandled Server Error:', error);
         return res.status(500).json({ error: 'Internal server error' });
     }
 }
