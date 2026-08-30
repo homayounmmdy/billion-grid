@@ -1,8 +1,6 @@
 // scripts/validate-grid.js
 // Enforces: "At most ONE new square can be added per commit"
-// - Compares current grid-data.json against the version in HEAD
-// - Counts how many new entries were added
-// - Blocks the commit if more than 1 new entry is detected
+// Works both locally (Husky) and in CI (GitHub Actions)
 
 import fs from 'fs';
 import path from 'path';
@@ -14,6 +12,7 @@ const filePath = path.resolve(__dirname, '..', 'public', 'grid-data.json');
 const RELATIVE_PATH = 'public/grid-data.json';
 
 console.log('🔍 Validating public/grid-data.json (one square per commit rule)...');
+console.log(`   Running in: ${process.env.CI ? 'CI (GitHub Actions)' : 'Local (Husky)'}`);
 
 // ---------- Helper: create a unique key for a square entry ----------
 function entryKey(item) {
@@ -29,7 +28,6 @@ function readFromGit(ref) {
         });
         return JSON.parse(output || '[]');
     } catch (err) {
-        // File doesn't exist in that ref (e.g., first commit)
         return [];
     }
 }
@@ -73,17 +71,33 @@ for (let i = 0; i < currentData.length; i++) {
     }
 }
 
-// ---------- 4. Get previous version from git ----------
-// Try HEAD first (normal commit). If HEAD doesn't exist yet (first commit),
-// fall back to empty array.
+// ---------- 4. Determine the previous state to compare against ----------
 let previousData = [];
-try {
-    // Check if HEAD exists at all
-    execSync('git rev-parse HEAD', { stdio: 'ignore' });
-    previousData = readFromGit('HEAD');
-} catch (err) {
-    // No HEAD yet — this is the first commit, previous state is empty
-    previousData = [];
+
+// In GitHub Actions, use HEAD^ (parent commit) or the base branch for PRs
+// Locally, use HEAD (the commit we're about to make)
+if (process.env.CI) {
+    // GitHub Actions: compare against the parent of the current commit
+    // For PRs, GITHUB_BASE_REF is set; for pushes, use HEAD^
+    const baseRef = process.env.GITHUB_BASE_REF
+        ? `origin/${process.env.GITHUB_BASE_REF}`
+        : 'HEAD^';
+
+    try {
+        previousData = readFromGit(baseRef);
+        console.log(`   Comparing against: ${baseRef}`);
+    } catch (err) {
+        console.log('   No previous state found, treating as first commit.');
+        previousData = [];
+    }
+} else {
+    // Local Husky: compare against HEAD
+    try {
+        execSync('git rev-parse HEAD', { stdio: 'ignore' });
+        previousData = readFromGit('HEAD');
+    } catch (err) {
+        previousData = [];
+    }
 }
 
 if (!Array.isArray(previousData)) {
@@ -94,7 +108,7 @@ if (!Array.isArray(previousData)) {
 const previousKeys = new Set(previousData.map(entryKey));
 const newEntries = currentData.filter((item) => !previousKeys.has(entryKey(item)));
 
-// ---------- 6. Also check for REMOVED entries (optional warning) ----------
+// ---------- 6. Check for REMOVED entries (warning only) ----------
 const currentKeys = new Set(currentData.map(entryKey));
 const removedEntries = previousData.filter((item) => !currentKeys.has(entryKey(item)));
 
@@ -132,8 +146,4 @@ newEntries.forEach((sq, i) => {
 });
 console.error('─────────────────────────────────────────────────────────────────');
 console.error('');
-console.error('💡 How to fix:');
-console.error('   • Split your changes into separate commits (one square each), OR');
-console.error('   • Remove the extra entries from grid-data.json before committing.');
-console.error('');
-process.exit(1);
+process.exit(1);g
