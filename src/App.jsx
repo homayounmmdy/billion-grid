@@ -27,90 +27,33 @@ export default function App() {
     });
   }, []);
 
-  const handleSubmit = useCallback(async () => {
-    if (!stagedSquare || committing) return;
+  const handleSubmit = useCallback(() => {
+    if (!stagedSquare) return;
 
-    // Require GitHub username in production
-    if (!githubUsername.trim()) {
+    const finalUsername = githubUsername.trim();
+    if (!finalUsername) {
       setShowUsernameModal(true);
       return;
     }
 
-    setStatus({ type: 'info', text: 'Checking if square is available...' });
+    // 1. Prepare the issue data
+    const issueTitle = `🎯 Claim: Square (${stagedSquare.x.toLocaleString()}, ${stagedSquare.y.toLocaleString()})`;
+    const issueBody = `X: ${stagedSquare.x}\nY: ${stagedSquare.y}\nColor: ${stagedSquare.color}\nUserId: ${finalUsername}`;
+    const labels = 'block-claim';
 
-    try {
-      const gridResponse = await fetch('/grid-data.json?t=' + Date.now());
-      if (gridResponse.ok) {
-        const gridData = await gridResponse.json();
+    // 2. Construct the GitHub Issue creation URL
+    const repoUrl = 'https://github.com/homayounmmdy/billion-grid';
+    const issueUrl = `${repoUrl}/issues/new?title=${encodeURIComponent(issueTitle)}&body=${encodeURIComponent(issueBody)}&labels=${encodeURIComponent(labels)}`;
 
-        // Check if this exact coordinate is already claimed by a DIFFERENT user
-        const existingClaim = gridData.find(
-          sq => sq.x === stagedSquare.x &&
-                sq.y === stagedSquare.y &&
-                sq.userId !== githubUsername.trim()
-        );
+    // 3. Save username and redirect
+    localStorage.setItem('billionGridGithubUser', finalUsername);
+    setStatus({ type: 'info', text: 'Redirecting to GitHub to finalize claim...' });
 
-        if (existingClaim) {
-          setStatus({
-            type: 'error',
-            text: `❌ This square is already claimed by @${existingClaim.userId}!`
-          });
-          setStagedSquare(null); // Clear the stage
-          return; // Stop here, don't create a PR
-        }
-      }
-    } catch (error) {
-      console.error('Failed to check grid data:', error);
-      // Continue anyway - the backend will catch it as a safety net
-    }
-
-    setCommitting(true);
-    setStatus({
-      type: 'info',
-      text: `Preparing PR for (${stagedSquare.x.toLocaleString()}, ${stagedSquare.y.toLocaleString()})...`
-    });
-
-    try {
-      // 1. Update local mock database (for immediate UI feedback)
-      await commitSquare(stagedSquare.x, stagedSquare.y, githubUsername, stagedSquare.color);
-
-      // 2. Call Vercel API to create the Pull Request
-      const response = await fetch('/api/create-pr', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          x: stagedSquare.x,
-          y: stagedSquare.y,
-          color: stagedSquare.color,
-          githubUsername: githubUsername.trim()
-        })
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        localStorage.setItem('billionGridGithubUser', githubUsername.trim());
-        setStatus({
-          type: 'success',
-          text: 'PR Created! Redirecting to GitHub...'
-        });
-        setStagedSquare(null);
-
-        // Redirect the current window directly to the new PR after 1 second
         setTimeout(() => {
-          window.location.href = result.prUrl;
-        }, 1000);
-      } else {
-        setStatus({ type: 'error', text: result.error || 'Failed to create PR' });
-        setCommitting(false);
-      }
-    } catch (error) {
-      console.error('Error during submit:', error);
-      setStatus({ type: 'error', text: 'Network error. Please try again.' });
-      setCommitting(false);
-    }
-  }, [stagedSquare, committing, githubUsername]);
-
+      window.open(issueUrl, '_blank');
+      setStagedSquare(null); // Clear stage locally
+    }, 500);
+  }, [stagedSquare, githubUsername]);
   const handleClearStage = () => {
     setStagedSquare(null);
     setStatus({ type: 'info', text: 'Stage cleared' });

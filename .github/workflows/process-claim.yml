@@ -1,0 +1,164 @@
+# .github/workflows/process-claim.yml
+name: Process Block Claim
+
+on:
+  issues:
+    types: [opened, labeled]
+
+jobs:
+  process-claim:
+    # Only run if the issue has the 'block-claim' label
+    if: contains(github.event.issue.labels.*.name, 'block-claim')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Parse issue and validate claim
+        id: parse-issue
+        run: |
+          node << 'EOF'
+          const fs = require('fs');
+          const issueBody = process.env.ISSUE_BODY;
+          const issueUser = process.env.ISSUE_USER;
+          const issueNumber = process.env.ISSUE_NUMBER;
+          
+          // Parse issue body (expects format: "X: 123\nY: 456\nColor: #fff\nUserId: alex")
+          const lines = issueBody.split('\n').filter(line => line.includes(':'));
+          const data = {};
+          for (const line of lines) {
+            const [key, ...valueParts] = line.split(':');
+            if (key && valueParts.length) {
+              data[key.trim().toLowerCase()] = valueParts.join(':').trim().replace(/^["']|["']$/g, '');
+            }
+          }
+          
+          // Validate required fields
+          if (!data.x || !data.y || !data.color || !data.userid) {
+            console.error('❌ Missing required fields in issue body');
+            process.exit(1);
+          }
+          
+          const x = parseInt(data.x);
+          const y = parseInt(data.y);
+          
+          // Ensure grid-data.json exists
+          const filePath = 'public/grid-data.json';
+          if (!fs.existsSync(filePath)) {
+            fs.writeFileSync(filePath, '[]');
+          }
+          
+          let gridData = [];
+          try {
+            gridData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+          } catch (e) {
+            gridData = [];
+          }
+          
+          // Check 1: Is coordinate already taken?
+          const isTaken = gridData.some(block => block.x === x && block.y === y);
+          if (isTaken) {
+            console.error(`❌ Block (${x}, ${y}) is already claimed.`);
+            process.exit(1);
+          }
+          
+          // Check 2: Does user already have a block?
+          const userHasBlock = gridData.some(block => block.userId === data.userid);
+          if (userHasBlock) {
+            console.error(`❌ User @${data.userid} already has a claimed block.`);
+            process.exit(1);
+          }
+          
+          // Add new block
+          const newBlock = {
+            x: x,
+            y: y,
+            userId: data.userid,
+            color: data.color,
+            timestamp: new Date().toISOString(),
+            claimedBy: issueUser,
+            claimMethod: 'github-issue',
+            issueNumber: parseInt(issueNumber)
+          };
+          
+          gridData.push(newBlock);
+          fs.writeFileSync(filePath, JSON.stringify(gridData, null, 2));
+          
+          // Save metadata for the PR step
+          fs.writeFileSync('/tmp/claim-info.json', JSON.stringify({
+            x, y, color: data.color, userid: data.userid, issueUser, issueNumber
+          }));
+          console.log('✅ Claim validated and JSON updated.');
+          EOF
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_USER: ${{ github.event.issue.user.login }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "feat: add block claim for @${{ github.event.issue.user.login }} (#${{ github.event.issue.number }})"
+          branch: "claim/issue-${{ github.event.issue.number }}"
+          delete-branch: true
+          title: "🎯 Block claim by @${{ github.event.issue.user.login }}"
+          body: |
+            ## 🎯 Automated Block Claim
+            
+            This PR was automatically generated from Issue #${{ github.event.issue.number }}.
+            
+            - **Claimed By:** @${{ github.event.issue.user.login }}
+            - **Method:** GitHub Issue
+            
+            *Validation: The GitHub Actions workflow has already verified that these coordinates are free and the user does not already own a block.*
+          labels: "automated-pr, block-claim"
+
+      - name: Comment on issue (Success)
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const claimInfo = JSON.parse(fs.readFileSync('/tmp/claim-info.json', 'utf8'));
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: claimInfo.issueNumber,
+              body: `✅ **Claim validated and PR created!**\n\n` +
+                    `A pull request has been automatically generated to add your block at **(${claimInfo.x}, ${claimInfo.y})**.\n\n` +
+                    `The repository owner will review and merge it shortly.`
+            });
+
+      - name: Comment on issue (Failure)
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = process.env.ISSUE_NUMBER;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: parseInt(issueNumber),
+              body: `❌ **Claim Failed**\n\n` +
+                    `This claim could not be processed. Possible reasons:\n` +
+                    `- The coordinates are already claimed by someone else.\n` +
+                    `- You already have a claimed block.\n` +
+                    `- The issue body was formatted incorrectly.\n\n` +
+                    `Please close this issue and try claiming a different square.`
+            });
+        env:
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
