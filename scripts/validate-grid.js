@@ -74,20 +74,22 @@ for (let i = 0; i < currentData.length; i++) {
 // ---------- 4. Determine the previous state to compare against ----------
 let previousData = [];
 
-// In GitHub Actions, use HEAD^ (parent commit) or the base branch for PRs
-// Locally, use HEAD (the commit we're about to make)
 if (process.env.CI) {
-    // GitHub Actions: compare against the parent of the current commit
-    // For PRs, GITHUB_BASE_REF is set; for pushes, use HEAD^
+  // GitHub Actions: compare against the base branch (usually 'main')
     const baseRef = process.env.GITHUB_BASE_REF
         ? `origin/${process.env.GITHUB_BASE_REF}`
         : 'HEAD^';
 
+  console.log(`   Comparing current branch against: ${baseRef}`);
+
     try {
+    // Verify the ref actually exists in this clone before trying to read it
+    execSync(`git rev-parse --verify ${baseRef}`, { stdio: 'ignore' });
         previousData = readFromGit(baseRef);
-        console.log(`   Comparing against: ${baseRef}`);
+    console.log(`   ✅ Found ${previousData.length} existing squares in ${baseRef}`);
     } catch (err) {
-        console.log('   No previous state found, treating as first commit.');
+    console.log(`   ⚠️ Could not find ${baseRef} in this clone. Treating as 0 previous squares.`);
+    console.log(`   (Tip: Ensure 'fetch-depth: 0' is set in your GitHub Actions workflow)`);
         previousData = [];
     }
 } else {
