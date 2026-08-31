@@ -15,14 +15,14 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5 # Updated to v5 to avoid Node 20 deprecation warnings
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20' # This is for your custom script execution. You can update to '22' or '24' if desired.
 
       - name: Parse issue and validate claim
         id: parse-issue
@@ -131,7 +131,7 @@ jobs:
 
       - name: Create Pull Request
         if: steps.parse-issue.outputs.valid == 'true'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8 # Updated from v6 to v8 (Node 24 compatible)
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "feat: add block claim for @${{ github.event.issue.user.login }} (#${{ github.event.issue.number }})"
@@ -158,7 +158,7 @@ jobs:
 
       - name: Comment on issue (Success)
         if: success() && steps.parse-issue.outputs.valid == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8 # Updated from v7 to v8 (Node 24 compatible)
         with:
           script: |
             const fs = require('fs');
@@ -175,7 +175,7 @@ jobs:
 
       - name: Comment on issue (Failure)
         if: failure() && steps.parse-issue.outputs.valid != 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8 # Updated from v7 to v8 (Node 24 compatible)
         with:
           script: |
             const issueNumber = process.env.ISSUE_NUMBER;
