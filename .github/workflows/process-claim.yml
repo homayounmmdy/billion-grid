@@ -119,7 +119,7 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
 
       - name: Create Pull Request
-        id: create-pr # <-- Added ID to reference its outputs
+        id: create-pr
         if: steps.parse-issue.outputs.valid == 'true'
         uses: peter-evans/create-pull-request@v8
         with:
@@ -144,6 +144,8 @@ jobs:
             This PR appends the new entry to [public/grid-data.json](https://github.com/homayounmmdy/billion-grid/blob/main/public/grid-data.json).
             
             *This PR was automatically generated and merged by the **Process Block Claim** workflow.*
+            
+            Closes #${{ github.event.issue.number }}
           labels: "automated-pr, block-claim"
 
       - name: Auto-merge Pull Request
@@ -158,14 +160,29 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   pull_number: prNumber,
-                  merge_method: 'squash' // Keeps commit history clean. Change to 'merge' if preferred.
+                  merge_method: 'squash'
                 });
                 console.log(`✅ PR #${prNumber} auto-merged successfully.`);
               } catch (error) {
                 console.error(`❌ Failed to auto-merge PR #${prNumber}:`, error.message);
-                // Workflow continues so the success comment still posts. 
-                // You can manually merge it if branch protection rules block the API.
               }
+            }
+
+      - name: Close Issue
+        if: steps.create-pr.outputs.pull-request-number != ''
+        uses: actions/github-script@v8
+        with:
+          script: |
+            try {
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: ${{ github.event.issue.number }},
+                state: 'closed'
+              });
+              console.log('✅ Issue closed successfully.');
+            } catch (error) {
+              console.error('❌ Failed to close issue:', error.message);
             }
 
       - name: Comment on issue (Success)
@@ -180,7 +197,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: claimInfo.issueNumber,
-              body: `✅ **Claim validated, PR created, and merged!**\n\n` +
+              body: `✅ **Claim validated, merged, and issue closed!**\n\n` +
                     `Your block at **(${claimInfo.x}, ${claimInfo.y})** for user **${claimInfo.userId}** has been successfully added to the grid.\n\n` +
                     `No further action is required.`
             });
