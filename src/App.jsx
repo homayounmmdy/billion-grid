@@ -1,8 +1,9 @@
 // App.jsx
-import { useState, useEffect, useCallback } from 'react';
-import CanvasGrid from './CanvasGrid';
-import { commitSquare, getUserSquare, loadInitialData } from './mockApi';
+import { useCallback, useEffect, useState } from 'react';
 import './App.css';
+import CanvasGrid from './CanvasGrid';
+import ColorPicker from './ColorPicker';
+import { loadInitialData } from './mockApi';
 
 const DEFAULT_USER_ID = 'user_123'; // Fallback for local dev
 
@@ -49,7 +50,7 @@ export default function App() {
     localStorage.setItem('billionGridGithubUser', finalUsername);
     setStatus({ type: 'info', text: 'Redirecting to GitHub to finalize claim...' });
 
-        setTimeout(() => {
+    setTimeout(() => {
       window.open(issueUrl, '_blank');
       setStagedSquare(null);
     }, 500);
@@ -64,105 +65,101 @@ export default function App() {
   }
 
   return (
-      <div className="app">
-        {/* Username Modal */}
-        {showUsernameModal && (
-            <div className="modal-overlay">
-              <div className="modal">
-                <h3>Enter your GitHub Username</h3>
-                <p>This will be used as your User ID and to create the Pull Request.</p>
-                <input
-                    type="text"
-                    placeholder="e.g., homayounmmdy"
-                    value={githubUsername}
-                    onChange={(e) => setGithubUsername(e.target.value)}
-                    autoFocus
-                />
-                <div className="modal-actions">
-                  <button className="btn btn-secondary" onClick={() => setShowUsernameModal(false)}>Cancel</button>
-                  <button className="btn btn-submit" onClick={() => {
-                    if (githubUsername.trim()) {
-                      setShowUsernameModal(false);
-                      handleSubmit();
-                    }
-                  }}>Continue</button>
-                </div>
-              </div>
-            </div>
-        )}
-
-        <header className="top-bar">
-          <div className="brand">
-            <span className="logo">◼</span>
-            <h1>Billion Grid</h1>
-            <span className="subtitle">1,000,000,000 × 1,000,000,000</span>
-          </div>
-
-          <div className="controls">
-            <label className="color-control">
-              <span>Your color:</span>
-              <input
-                  type="color"
-                  value={userColor}
-                  disabled={committing || !!stagedSquare}
-                  onChange={(e) => setUserColor(e.target.value)}
-              />
-            </label>
-
-            <div className="user-badge" onClick={() => setShowUsernameModal(true)} style={{ cursor: 'pointer' }}>
-              <span className="dot" style={{ background: userColor }} />
-              {githubUsername || 'Set GitHub User'}
+    <div className="app">
+      {/* Username Modal */}
+      {showUsernameModal && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>Enter your GitHub Username</h3>
+            <p>This will be used as your User ID and to create the Pull Request.</p>
+            <input
+              type="text"
+              placeholder="e.g., homayounmmdy"
+              value={githubUsername}
+              onChange={(e) => setGithubUsername(e.target.value)}
+              autoFocus
+            />
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => setShowUsernameModal(false)}>Cancel</button>
+              <button className="btn btn-submit" onClick={() => {
+                if (githubUsername.trim()) {
+                  setShowUsernameModal(false);
+                  handleSubmit();
+                }
+              }}>Continue</button>
             </div>
           </div>
-        </header>
+        </div>
+      )}
 
-        <main className="main">
-          <CanvasGrid
-              userId={githubUsername || DEFAULT_USER_ID}
-              userColor={userColor}
-              stagedSquare={stagedSquare}
-              setStagedSquare={setStagedSquare}
-              committing={committing}
+      <header className="top-bar">
+        <div className="brand">
+          <span className="logo">◼</span>
+          <h1>Billion Grid</h1>
+          <span className="subtitle">1,000,000,000 × 1,000,000,000</span>
+        </div>
+
+        <div className="controls">
+          <ColorPicker
+            value={userColor}
+            onChange={setUserColor}
+            disabled={committing || !!stagedSquare}
           />
-        </main>
 
-        <footer className="status-bar">
-          <div className="status-actions">
-            <div className={`status status-${status.type}`}>
-              {committing && <span className="spinner" />}
-              {status.text}
-            </div>
+          <div className="user-badge" onClick={() => setShowUsernameModal(true)} style={{ cursor: 'pointer' }}>
+            <span className="dot" style={{ background: userColor }} />
+            {githubUsername || 'Set GitHub User'}
+          </div>
+        </div>
+      </header>
 
-            <div className="action-buttons">
-              {stagedSquare && (
-                  <>
-                    <button className="btn btn-clear" onClick={handleClearStage} disabled={committing}>
-                      Clear Stage
-                    </button>
-                    <button className="btn btn-submit" onClick={handleSubmit} disabled={committing}>
-                      {committing ? 'Loading...' : 'Submit'}
-                    </button>
-                  </>
-              )}
-            </div>
+      <main className="main">
+        <CanvasGrid
+          userId={githubUsername || DEFAULT_USER_ID}
+          userColor={userColor}
+          stagedSquare={stagedSquare}
+          setStagedSquare={setStagedSquare}
+          committing={committing}
+        />
+      </main>
+
+      <footer className="status-bar">
+        <div className="status-actions">
+          <div className={`status status-${status.type}`}>
+            {committing && <span className="spinner" />}
+            {status.text}
           </div>
 
-          {mySquare && (
-              <div className="my-square-info">
-                Your square: ({mySquare.x.toLocaleString()}, {mySquare.y.toLocaleString()})
-              </div>
-          )}
-        </footer>
+          <div className="action-buttons">
+            {stagedSquare && (
+              <>
+                <button className="btn btn-clear" onClick={handleClearStage} disabled={committing}>
+                  Clear Stage
+                </button>
+                <button className="btn btn-submit" onClick={handleSubmit} disabled={committing}>
+                  {committing ? 'Loading...' : 'Submit'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
 
-        {stagedSquare && typeof stagedSquare.x === 'number' && (
-            <div className="stage-info">
-              <div className="stage-label">STAGED</div>
-              <div className="stage-coords">
-                ({stagedSquare.x.toLocaleString()}, {stagedSquare.y.toLocaleString()})
-              </div>
-              <div className="stage-color" style={{ background: stagedSquare.color }} />
-            </div>
+        {mySquare && (
+          <div className="my-square-info">
+            Your square: ({mySquare.x.toLocaleString()}, {mySquare.y.toLocaleString()})
+          </div>
         )}
-      </div>
+      </footer>
+
+      {stagedSquare && typeof stagedSquare.x === 'number' && (
+        <div className="stage-info">
+          <div className="stage-label">STAGED</div>
+          <div className="stage-coords">
+            ({stagedSquare.x.toLocaleString()}, {stagedSquare.y.toLocaleString()})
+          </div>
+          <div className="stage-color" style={{ background: stagedSquare.color }} />
+        </div>
+      )}
+    </div>
   );
 }

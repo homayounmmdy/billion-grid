@@ -1,0 +1,362 @@
+/* src/ColorPicker.css */
+.color-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-picker-label {
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.color-swatch-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 90px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.color-swatch-btn:hover:not(:disabled) {
+  border-color: #38bdf8;
+  transform: translateY(-1px);
+}
+
+.color-swatch-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.swatch-hex {
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  letter-spacing: 0.5px;
+}
+
+/* Popover */
+.color-picker-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 1000;
+  padding: 14px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  animation: popoverFadeIn 0.15s ease-out;
+  width: 260px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.color-picker-popover::-webkit-scrollbar {
+  width: 6px;
+}
+.color-picker-popover::-webkit-scrollbar-track {
+  background: transparent;
+}
+.color-picker-popover::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 3px;
+}
+
+@keyframes popoverFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* react-colorful overrides */
+.color-picker-popover .react-colorful {
+  width: 100%;
+  height: 160px;
+}
+
+.color-picker-popover .react-colorful__saturation {
+  border-radius: 6px 6px 0 0;
+  border-bottom: none;
+}
+
+.color-picker-popover .react-colorful__hue {
+  height: 16px;
+  border-radius: 0 0 6px 6px;
+}
+
+.color-picker-popover .react-colorful__pointer {
+  width: 18px;
+  height: 18px;
+  border-width: 3px;
+  border-color: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* Format switcher */
+.format-switcher {
+  display: flex;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 3px;
+  background: #0f172a;
+  border-radius: 6px;
+}
+
+.format-tab {
+  flex: 1;
+  padding: 6px 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #94a3b8;
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.5px;
+}
+
+.format-tab:hover {
+  color: #e2e8f0;
+}
+
+.format-tab.active {
+  background: #334155;
+  color: #38bdf8;
+}
+
+/* Format inputs */
+.format-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  padding: 4px 10px;
+  transition: border-color 0.2s;
+}
+
+.format-input:focus-within {
+  border-color: #38bdf8;
+}
+
+.input-prefix {
+  color: #64748b;
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 13px;
+}
+
+.format-input input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e2e8f0;
+  font-family: 'SF Mono', Consolas, monospace;
+  font-size: 13px;
+  padding: 6px 0;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  min-width: 0;
+}
+
+.format-input input::-webkit-outer-spin-button,
+.format-input input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.format-input input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* RGB / HSL multi-field layout */
+.rgb-input,
+.hsl-input {
+  gap: 8px;
+  padding: 6px 8px;
+}
+
+.rgb-field,
+.hsl-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.rgb-field label,
+.hsl-field label {
+  font-size: 10px;
+  color: #64748b;
+  font-family: 'SF Mono', Consolas, monospace;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.hsl-field .unit {
+  font-size: 9px;
+  color: #475569;
+  margin-left: 1px;
+}
+
+.rgb-field input,
+.hsl-field input {
+  width: 100%;
+  text-align: center;
+  font-size: 12px;
+  padding: 4px 0;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Harmonies section */
+.harmonies-section {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #334155;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.harmony-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.harmony-label {
+  font-size: 10px;
+  color: #64748b;
+  font-family: 'SF Mono', Consolas, monospace;
+  min-width: 85px;
+  letter-spacing: 0.3px;
+}
+
+.harmony-swatches {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.harmony-swatch {
+  flex: 1;
+  height: 22px;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  padding: 0;
+}
+
+.harmony-swatch:hover {
+  transform: scale(1.1);
+  border-color: #fff;
+  z-index: 1;
+}
+
+/* Shades section */
+.shades-section {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shade-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shade-label {
+  font-size: 10px;
+  color: #64748b;
+  font-family: 'SF Mono', Consolas, monospace;
+  min-width: 85px;
+  letter-spacing: 0.3px;
+}
+
+.shade-swatches {
+  display: flex;
+  gap: 3px;
+  flex: 1;
+}
+
+.shade-swatch {
+  flex: 1;
+  height: 18px;
+  border: 1px solid #334155;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+  padding: 0;
+}
+
+.shade-swatch:hover {
+  transform: scale(1.15);
+  border-color: #fff;
+  z-index: 1;
+}
+
+/* Presets */
+.color-picker-presets {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #334155;
+}
+
+.presets-label {
+  display: block;
+  font-size: 10px;
+  color: #64748b;
+  font-family: 'SF Mono', Consolas, monospace;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.presets-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 5px;
+}
+
+.preset-swatch {
+  aspect-ratio: 1;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+  padding: 0;
+}
+
+.preset-swatch:hover {
+  transform: scale(1.15);
+  z-index: 1;
+  border-color: #fff;
+}
+
+.preset-swatch.active {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.3);
+}

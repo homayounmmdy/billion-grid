@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "react": "^19.2.8",
+    "react-colorful": "^5.8.0",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {

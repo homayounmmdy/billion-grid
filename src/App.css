@@ -73,38 +73,6 @@ html, body, #root {
   gap: 20px;
 }
 
-.color-control {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: #cbd5e1;
-}
-
-.color-control input[type="color"] {
-  width: 36px;
-  height: 28px;
-  border: 1px solid #475569;
-  border-radius: 4px;
-  background: transparent;
-  cursor: pointer;
-  padding: 0;
-}
-
-.color-control input[type="color"]:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.color-control input[type="color"]::-webkit-color-swatch-wrapper {
-  padding: 2px;
-}
-
-.color-control input[type="color"]::-webkit-color-swatch {
-  border: none;
-  border-radius: 2px;
-}
-
 .user-badge {
   display: flex;
   align-items: center;
