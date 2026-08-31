@@ -37,6 +37,13 @@ jobs:
           const issueNumber = process.env.ISSUE_NUMBER;
           const githubOutput = process.env.GITHUB_OUTPUT;
           
+          // Helper function to fail with a specific reason
+          function failWithReason(reason) {
+            fs.appendFileSync(githubOutput, `error_reason=${reason}\n`);
+            console.error(`❌ ${reason}`);
+            process.exit(1);
+          }
+
           // 1. Validate Issue Title
           if (!issueTitle.includes('Claim: Square')) {
             console.log('ℹ️ Issue title does not match "Claim: Square". Skipping.');
@@ -55,16 +62,14 @@ jobs:
           }
           
           if (!data.x || !data.y || !data.color || !data.userid) {
-            console.error('❌ Missing required fields in issue body.');
-            process.exit(1);
+            failWithReason('Missing required fields. Please ensure X, Y, Color, and UserId are provided in the issue body.');
           }
           
           const x = parseInt(data.x, 10);
           const y = parseInt(data.y, 10);
           
           if (isNaN(x) || isNaN(y)) {
-            console.error('❌ X and Y must be valid numbers.');
-            process.exit(1);
+            failWithReason('Invalid coordinates. X and Y must be valid numbers.');
           }
           
           // 3. Read existing grid data
@@ -84,8 +89,7 @@ jobs:
           // 4. Validation Check: Is coordinate taken?
           const existingCoordinate = gridData.find(block => block.x === x && block.y === y);
           if (existingCoordinate) {
-            console.error(`❌ Block (${x}, ${y}) is already claimed by UserId: ${existingCoordinate.userId}`);
-            process.exit(1);
+            failWithReason(`The coordinates (${x}, ${y}) are already claimed by UserId: \`${existingCoordinate.userId}\`.`);
           }
           
           // 5. Add new block to JSON (Simplified)
@@ -203,20 +207,25 @@ jobs:
             });
 
       - name: Comment on issue (Failure)
-        if: failure() && steps.parse-issue.outputs.valid != 'true'
+        if: failure()
         uses: actions/github-script@v8
         with:
           script: |
             const issueNumber = process.env.ISSUE_NUMBER;
+            const errorReason = `${{ steps.parse-issue.outputs.error_reason }}`.trim();
+            
+            let body = `❌ **Claim Failed**\n\n`;
+            if (errorReason) {
+              body += `**Reason:** ${errorReason}\n\nPlease choose a different, unclaimed coordinate or verify your issue formatting.`;
+            } else {
+              body += `An unexpected system error occurred while processing this claim. Please check the workflow logs or contact the repository owner.`;
+            }
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: parseInt(issueNumber),
-              body: `❌ **Claim Failed**\n\n` +
-                    `This claim could not be processed. Please check the "Process Block Claim" workflow logs for the exact reason.\n\n` +
-                    `Common reasons:\n` +
-                    `- The coordinates are already claimed.\n` +
-                    `- The issue body was formatted incorrectly.`
+              body: body
             });
         env:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
