@@ -140,7 +140,7 @@ export default function App() {
                       Clear Stage
                     </button>
                     <button className="btn btn-submit" onClick={handleSubmit} disabled={committing}>
-                      {committing ? 'Creating PR...' : 'Submit & Create PR'}
+                      {committing ? 'Loading...' : 'Submit'}
                     </button>
                   </>
               )}
