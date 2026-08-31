@@ -27,11 +27,21 @@
     "color": "#71cea9",
     "timestamp": "2026-08-30T11:28:59.854Z"
   },
-    {
+  {
     "x": 499999996,
     "y": 499999980,
     "userId": "mr-robot124f",
     "color": "#71cea9",
     "timestamp": "2026-08-30T11:28:59.854Z"
+  },
+  {
+    "x": 499999934,
+    "y": 499999978,
+    "userId": "homayounmmdy",
+    "color": "#002e8a",
+    "timestamp": "2026-08-31T18:31:19.159Z",
+    "claimedBy": "homayounmmdy",
+    "claimMethod": "github-issue",
+    "issueNumber": 15
   }
 ]
