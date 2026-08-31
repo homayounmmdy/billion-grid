@@ -1,0 +1,138 @@
+# .github/workflows/prevent-duplicate-claims.yml
+name: Prevent Duplicate Block Claims
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'public/grid-data.json'
+
+jobs:
+  check-duplicate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Fetch main branch
+        run: git fetch origin main
+
+      - name: Check for duplicate claims
+        id: check-duplicates
+        run: |
+          node << 'EOF'
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+
+          const prTitle = process.env.PR_TITLE || '';
+          const prBody = process.env.PR_BODY || '';
+          const githubOutput = process.env.GITHUB_OUTPUT;
+          
+          // Extract issue number from PR title or body (e.g., "#15")
+          const issueMatch = prTitle.match(/#(\d+)/) || prBody.match(/#(\d+)/);
+          const issueNumber = issueMatch ? issueMatch[1] : '';
+
+          let prGridData = [];
+          let mainGridData = [];
+
+          try {
+            prGridData = JSON.parse(fs.readFileSync('public/grid-data.json', 'utf8'));
+          } catch (e) {
+            console.error('❌ Failed to read grid-data.json from PR branch.');
+            process.exit(1);
+          }
+
+          try {
+            const mainData = execSync('git show origin/main:public/grid-data.json', { encoding: 'utf8' });
+            mainGridData = JSON.parse(mainData);
+          } catch (e) {
+            // If file doesn't exist in main yet, it's an empty array
+            mainGridData = [];
+          }
+
+          const conflicts = [];
+          for (const prBlock of prGridData) {
+            const existsInMain = mainGridData.find(mainBlock => mainBlock.x === prBlock.x && mainBlock.y === prBlock.y);
+            if (existsInMain) {
+              conflicts.push({
+                x: prBlock.x,
+                y: prBlock.y,
+                claimedBy: existsInMain.userId
+              });
+            }
+          }
+
+          if (conflicts.length > 0) {
+            const conflictDetails = conflicts.map(c => `(${c.x}, ${c.y}) [claimed by ${c.claimedBy}]`).join(', ');
+            const reason = `The block(s) ${conflictDetails} are already claimed in the main branch. This is likely a race condition where another user claimed it first.`;
+            
+            fs.appendFileSync(githubOutput, `conflict=true\n`);
+            fs.appendFileSync(githubOutput, `issue_number=${issueNumber}\n`);
+            fs.appendFileSync(githubOutput, `reason=${reason}\n`);
+            
+            console.log(`❌ Duplicate claim detected: ${conflictDetails}`);
+          } else {
+            console.log('✅ No duplicate claims detected.');
+          }
+          EOF
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+
+      - name: Close PR and Issue if duplicate
+        if: steps.check-duplicates.outputs.conflict == 'true'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const issueNumber = parseInt('${{ steps.check-duplicates.outputs.issue_number }}', 10);
+            const reason = `${{ steps.check-duplicates.outputs.reason }}`;
+
+            // 1. Close the Pull Request
+            try {
+              await github.rest.pulls.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber,
+                state: 'closed'
+              });
+              console.log(`✅ Closed PR #${prNumber}`);
+            } catch (error) {
+              console.error(`❌ Failed to close PR #${prNumber}:`, error.message);
+            }
+
+            // 2. Close the related Issue and comment
+            if (issueNumber) {
+              try {
+                await github.rest.issues.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  state: 'closed'
+                });
+                console.log(`✅ Closed Issue #${issueNumber}`);
+              } catch (error) {
+                console.error(`❌ Failed to close Issue #${issueNumber}:`, error.message);
+              }
+
+              try {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: `❌ **Claim Automatically Rejected**\n\n` +
+                        `**Reason:** ${reason}\n\n` +
+                        `It appears another user claimed this coordinate and it was merged before this request could be processed. Please choose a different, unclaimed coordinate and submit a new issue.`
+                });
+                console.log(`✅ Commented on Issue #${issueNumber}`);
+              } catch (error) {
+                console.error(`❌ Failed to comment on Issue #${issueNumber}:`, error.message);
+              }
+            }
